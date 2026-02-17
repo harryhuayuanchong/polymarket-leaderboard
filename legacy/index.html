@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Polymarket Leaderboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Polymarket Leaderboard</p>
+          <h1>Top Traders & Biggest Wins</h1>
+          <p class="subhead">
+            Pulls live leaderboard data from Polymarket’s Data API and highlights tagged
+            "Smart Money" addresses.
+          </p>
+        </div>
+        <div class="hero-card">
+          <div class="hero-stat">
+            <span class="label">Category</span>
+            <span id="statCategory" class="value">Overall</span>
+          </div>
+          <div class="hero-stat">
+            <span class="label">Time Period</span>
+            <span id="statPeriod" class="value">Day</span>
+          </div>
+          <div class="hero-stat">
+            <span class="label">Results</span>
+            <span id="statCount" class="value">0</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="controls">
+        <div class="search">
+          <span class="search-icon">⌕</span>
+          <input id="search" type="search" placeholder="Search by address or name" />
+        </div>
+        <div class="filters">
+          <select id="category" class="pill">
+            <option value="OVERALL">Overall</option>
+            <option value="POLITICS">Politics</option>
+            <option value="SPORTS">Sports</option>
+            <option value="CRYPTO">Crypto</option>
+            <option value="CULTURE">Culture</option>
+            <option value="MENTIONS">Mentions</option>
+            <option value="WEATHER">Weather</option>
+            <option value="ECONOMICS">Economics</option>
+            <option value="TECH">Tech</option>
+            <option value="FINANCE">Finance</option>
+          </select>
+          <select id="timePeriod" class="pill">
+            <option value="DAY">1 Day</option>
+            <option value="WEEK">7 Days</option>
+            <option value="MONTH">1 Month</option>
+            <option value="ALL">All Time</option>
+          </select>
+          <select id="limit" class="pill">
+            <option value="50" selected>50</option>
+          </select>
+          <button id="exportCsv" class="pill-button">Export CSV</button>
+          <button id="refresh" class="pill-button icon-button" aria-label="Refresh">
+            <span class="icon">↻</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="table-wrap">
+        <div class="table-header">
+          <h2>Leaderboard</h2>
+        </div>
+        <div class="status" id="status">Loading...</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Username</th>
+              <th>Event (Last Trade)</th>
+              <th>Positions</th>
+              <th class="sortable" data-sort="pnl">PNL</th>
+              <th class="sortable" data-sort="volume">Volume</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+
+      <div id="toast" class="toast hidden">Copied address</div>
+
+      <div id="modalOverlay" class="modal-overlay hidden">
+        <div class="modal">
+          <button id="modalClose" class="modal-close" aria-label="Close">×</button>
+          <div class="modal-header">
+            <div class="profile">
+              <div class="avatar" id="modalAvatar">?</div>
+              <div>
+                <div class="profile-name" id="modalName">Wallet</div>
+                <div class="profile-sub">
+                  <span id="modalJoined">Joined —</span>
+                  <span class="dot">•</span>
+                  <button id="modalCopy" class="copy-btn" type="button">
+                    <span id="modalAddressShort">0x…</span>
+                    <span class="copy-icon">⧉</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-metrics">
+            <div class="metric-card">
+              <span>Lifetime PNL</span>
+              <strong id="modalLifetimePnl">—</strong>
+              <small id="modalLifetimePnlNote">Based on closed positions</small>
+            </div>
+            <div class="metric-card">
+              <span>Lifetime Volume</span>
+              <strong id="modalLifetimeVol">—</strong>
+              <small id="modalLifetimeVolNote">Based on recent activity</small>
+            </div>
+            <div class="metric-card">
+              <span>Open Positions</span>
+              <strong id="modalPositionsCount">—</strong>
+              <small>Total value: <span id="modalPositionsValue">—</span></small>
+            </div>
+            <div class="metric-card">
+              <span>Trades (Recent)</span>
+              <strong id="modalTradesCount">—</strong>
+              <small>Last 200 trades</small>
+            </div>
+          </div>
+
+          <section class="modal-panel modal-chart-panel">
+            <div class="panel-header">
+              <div class="chart-title">
+                <span>PNL</span>
+                <small>All time</small>
+              </div>
+            </div>
+            <div class="chart-value" id="chartValue">$0.00</div>
+            <div id="modalChart" class="chart chart-large">
+              <div class="chart-empty">No closed positions yet.</div>
+            </div>
+          </section>
+
+          <div class="modal-grid">
+            <section class="modal-panel">
+              <header>Trade Summary</header>
+              <div id="modalTradeSummary" class="panel-list">Loading...</div>
+            </section>
+
+            <section class="modal-panel">
+              <header>Position Summary</header>
+              <div id="modalPositionSummary" class="panel-list">Loading...</div>
+            </section>
+
+            <section class="modal-panel">
+              <header>Position Details</header>
+              <div id="modalPositions" class="panel-list">Loading...</div>
+            </section>
+
+            <section class="modal-panel">
+              <header>Trading History</header>
+              <div id="modalHistory" class="panel-list">Loading...</div>
+            </section>
+          </div>
+
+          <div class="modal-footer">
+            <a id="modalProfileLink" class="pill-button" href="#" target="_blank" rel="noreferrer">
+              View Full Profile
+            </a>
+            <button class="pill-button" type="button" disabled>Track Wallet</button>
+          </div>
+        </div>
+      </div>
+
+      <footer class="footer">
+        <p>
+          Data source: Polymarket Data API. Sorting is client-side for PNL and Volume. Smart Money
+          classification combines performance rules and optional WalletLabels signals configured in
+          <code>app.js</code>.
+        </p>
+      </footer>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
