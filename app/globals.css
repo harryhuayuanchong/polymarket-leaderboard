@@ -548,6 +548,21 @@ tbody tr:hover {
   line-height: 1.4;
 }
 
+.ai-hl-num {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.ai-hl-event {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.ai-hl-category {
+  color: var(--modal-accent);
+  font-weight: 700;
+}
+
 .modal-panel {
   background: var(--modal-panel);
   border: 1px solid var(--modal-border);

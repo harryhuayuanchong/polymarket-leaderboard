@@ -79,6 +79,7 @@ Notes:
 Run this migration in Supabase SQL editor:
 
 - `supabase/migrations/001_wallet_ai_summaries.sql`
+- `supabase/migrations/002_watchlist_wallets.sql`
 
 ## Build and Run
 
@@ -108,6 +109,13 @@ npm run start
 - Generate summary with OpenAI if cache miss
 - Fall back to deterministic rule-based summary if AI key is unavailable
 - Upsert back into Supabase for reuse
+- Watchlist endpoint:
+- `GET /api/watchlist`
+- `POST /api/watchlist`
+- `DELETE /api/watchlist`
+- Behavior:
+- Persists tracked wallets in Supabase table `watchlist_wallets`
+- Scopes records by a per-browser client id stored in localStorage
 
 ## Deployment (Vercel)
 

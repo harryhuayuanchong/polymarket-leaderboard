@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 const API_BASE = "https://data-api.polymarket.com";
 const LABELS_API_BASE = "https://api.walletlabels.xyz/api";
@@ -8,6 +8,7 @@ const LABELS_API_BASE = "https://api.walletlabels.xyz/api";
 const DETAILS_LIMIT = 20;
 const DETAILS_TTL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
+const WATCHLIST_CLIENT_KEY = "watchlistClientId";
 
 const SMART_MONEY_ALLOWLIST = new Set<string>([
   "0x0000000000000000000000000000000000000000",
@@ -104,6 +105,40 @@ function toTimestamp(value: any) {
   return numeric < 1e12 ? numeric * 1000 : numeric;
 }
 
+function inferCategoryFromData(positions: any[], activity: any[]): string | null {
+  const corpus = [
+    ...positions.map((p) => String(p?.title || p?.outcome || p?.market?.question || "")),
+    ...activity.map((a) => String(a?.title || a?.name || a?.eventTitle || "")),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (!corpus) return null;
+
+  const rules: Array<{ category: string; words: string[] }> = [
+    { category: "Sports", words: ["fc", "nba", "nfl", "mlb", "score", "match", "vs", "goal"] },
+    { category: "Politics", words: ["election", "president", "senate", "vote", "campaign"] },
+    { category: "Crypto", words: ["btc", "bitcoin", "eth", "ethereum", "solana", "token"] },
+    { category: "Economics", words: ["inflation", "fed", "rate", "cpi", "gdp"] },
+    { category: "Tech", words: ["ai", "openai", "apple", "google", "tesla", "nvidia"] },
+    { category: "Finance", words: ["stock", "nasdaq", "s&p", "earnings", "bond"] },
+    { category: "Weather", words: ["hurricane", "rainfall", "temperature", "snow"] },
+    { category: "Culture", words: ["movie", "oscar", "grammy", "celebrity"] },
+  ];
+
+  let best: { category: string; score: number } | null = null;
+  for (const rule of rules) {
+    let score = 0;
+    for (const word of rule.words) {
+      if (corpus.includes(word)) score += 1;
+    }
+    if (!best || score > best.score) best = { category: rule.category, score };
+  }
+
+  if (!best || best.score === 0) return null;
+  return best.category;
+}
+
 async function fetchWithTimeout(url: string) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -150,6 +185,8 @@ export default function Home() {
     aiSummaryError: "",
     aiSummarySource: "",
     aiSummaryUpdatedAt: "",
+    aiSummaryCategory: "",
+    aiSummaryEvent: "",
     aiSummary: {
       performanceSnapshot: "",
       holdingBehavior: "",
@@ -173,6 +210,7 @@ export default function Home() {
   const debounceTimer = useRef<number | null>(null);
   const toastTimer = useRef<number | null>(null);
   const activeModalRef = useRef<string | null>(null);
+  const watchlistClientIdRef = useRef<string>("");
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -204,6 +242,52 @@ export default function Home() {
   function updateStatus(message: string, loading = false) {
     setStatus(message);
     setIsLoading(loading);
+  }
+
+  function highlightByRegex(nodes: ReactNode[], regex: RegExp, className: string) {
+    const result: ReactNode[] = [];
+    let key = 0;
+    for (const node of nodes) {
+      if (typeof node !== "string") {
+        result.push(node);
+        continue;
+      }
+      let last = 0;
+      for (const match of node.matchAll(regex)) {
+        const idx = match.index ?? 0;
+        if (idx > last) result.push(node.slice(last, idx));
+        result.push(
+          <span key={`${className}-${key++}`} className={className}>
+            {match[0]}
+          </span>
+        );
+        last = idx + match[0].length;
+      }
+      if (last < node.length) result.push(node.slice(last));
+    }
+    return result;
+  }
+
+  function renderAiText(text: string, eventName?: string, categoryName?: string) {
+    let nodes: ReactNode[] = [text];
+
+    if (eventName) {
+      const safe = eventName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      nodes = highlightByRegex(nodes, new RegExp(safe, "gi"), "ai-hl-event");
+    }
+
+    if (categoryName) {
+      const safe = categoryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      nodes = highlightByRegex(nodes, new RegExp(safe, "gi"), "ai-hl-category");
+    }
+
+    nodes = highlightByRegex(
+      nodes,
+      /(\$-?\d[\d,]*(?:\.\d+)?|-?\d+(?:\.\d+)?%|\b\d+(?:\.\d+)?\b)/g,
+      "ai-hl-num"
+    );
+
+    return nodes;
   }
 
   async function fetchLeaderboard() {
@@ -596,6 +680,8 @@ export default function Home() {
       aiSummaryError: "",
       aiSummarySource: "",
       aiSummaryUpdatedAt: "",
+      aiSummaryCategory: "",
+      aiSummaryEvent: "",
       aiSummary: {
         performanceSnapshot: "",
         holdingBehavior: "",
@@ -647,8 +733,10 @@ export default function Home() {
     const topPosition = sortedByValue[0];
     const topPositionTitle = topPosition?.title || null;
     const topPositionValue = Number(topPosition?.currentValue ?? topPosition?.value ?? 0) || 0;
+    const inferredCategory = inferCategoryFromData(positions, activity);
     const categoryHint =
       topPosition?.category || topPosition?.market?.category || topPosition?.tags?.[0] || null;
+    const bestCategory = categoryHint || inferredCategory;
 
     setModalData((prev) => ({
       ...prev,
@@ -683,19 +771,21 @@ export default function Home() {
         topPositionTitle,
         topPositionValue,
         winRate,
-        categoryHint,
+        categoryHint: bestCategory,
       });
 
       if (activeModalRef.current !== row.address) return;
 
       setModalData((prev) => ({
         ...prev,
-        aiSummaryLoading: false,
-        aiSummaryError: "",
-        aiSummarySource: aiResponse?.source || "",
-        aiSummaryUpdatedAt: aiResponse?.updatedAt || "",
-        aiSummary: aiResponse?.summary || prev.aiSummary,
-      }));
+      aiSummaryLoading: false,
+      aiSummaryError: "",
+      aiSummarySource: aiResponse?.source || "",
+      aiSummaryUpdatedAt: aiResponse?.updatedAt || "",
+      aiSummaryCategory: bestCategory || "",
+      aiSummaryEvent: topPositionTitle || "",
+      aiSummary: aiResponse?.summary || prev.aiSummary,
+    }));
     } catch (error) {
       if (activeModalRef.current !== row.address) return;
       setModalData((prev) => ({
@@ -802,22 +892,39 @@ export default function Home() {
   }, [category, timePeriod, limit]);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("trackedWallets");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setTracked(parsed);
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }, []);
+    const ensureClientId = () => {
+      const existing = window.localStorage.getItem(WATCHLIST_CLIENT_KEY);
+      if (existing) return existing;
+      const generated = window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      window.localStorage.setItem(WATCHLIST_CLIENT_KEY, generated);
+      return generated;
+    };
 
-  useEffect(() => {
-    window.localStorage.setItem("trackedWallets", JSON.stringify(tracked));
-  }, [tracked]);
+    const loadWatchlist = async () => {
+      const clientId = ensureClientId();
+      watchlistClientIdRef.current = clientId;
+
+      const response = await fetch("/api/watchlist", {
+        method: "GET",
+        headers: {
+          "x-client-id": clientId,
+        },
+      }).catch(() => null);
+
+      if (!response || !response.ok) {
+        showToast("Unable to sync watchlist");
+        return;
+      }
+
+      const data = await response.json();
+      const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+      setTracked(wallets);
+    };
+
+    void loadWatchlist();
+  }, []);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("theme");
@@ -841,15 +948,32 @@ export default function Home() {
     return tracked.includes(address.toLowerCase());
   }
 
-  function toggleTrack(address: string | null) {
+  async function toggleTrack(address: string | null) {
     if (!address) return;
     const normalized = address.toLowerCase();
-    setTracked((prev) => {
-      if (prev.includes(normalized)) {
-        return prev.filter((item) => item !== normalized);
-      }
-      return [...prev, normalized];
-    });
+    const clientId = watchlistClientIdRef.current;
+    if (!clientId) {
+      showToast("Watchlist client not ready");
+      return;
+    }
+
+    const exists = tracked.includes(normalized);
+    const next = exists ? tracked.filter((item) => item !== normalized) : [...tracked, normalized];
+    setTracked(next);
+
+    const response = await fetch("/api/watchlist", {
+      method: exists ? "DELETE" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-client-id": clientId,
+      },
+      body: JSON.stringify({ walletAddress: normalized }),
+    }).catch(() => null);
+
+    if (!response || !response.ok) {
+      setTracked(tracked);
+      showToast("Unable to update watchlist");
+    }
   }
 
   function exportCsv(rows: any[][], headers: string[], filename: string) {
@@ -1101,7 +1225,7 @@ export default function Home() {
                   <td>
                     <button
                       className={`star-btn ${trackedActive ? "active" : ""}`}
-                      onClick={() => toggleTrack(row.address)}
+                      onClick={() => void toggleTrack(row.address)}
                     >
                       {trackedActive ? "★" : "☆"}
                     </button>
@@ -1193,19 +1317,43 @@ export default function Home() {
                 <div className="ai-summary-grid">
                   <div className="ai-summary-card">
                     <h4>Performance Snapshot</h4>
-                    <p>{modalData.aiSummary.performanceSnapshot}</p>
+                    <p>
+                      {renderAiText(
+                        modalData.aiSummary.performanceSnapshot,
+                        modalData.aiSummaryEvent,
+                        modalData.aiSummaryCategory
+                      )}
+                    </p>
                   </div>
                   <div className="ai-summary-card">
                     <h4>Holding Behavior</h4>
-                    <p>{modalData.aiSummary.holdingBehavior}</p>
+                    <p>
+                      {renderAiText(
+                        modalData.aiSummary.holdingBehavior,
+                        modalData.aiSummaryEvent,
+                        modalData.aiSummaryCategory
+                      )}
+                    </p>
                   </div>
                   <div className="ai-summary-card">
                     <h4>Trade Pattern</h4>
-                    <p>{modalData.aiSummary.tradePattern}</p>
+                    <p>
+                      {renderAiText(
+                        modalData.aiSummary.tradePattern,
+                        modalData.aiSummaryEvent,
+                        modalData.aiSummaryCategory
+                      )}
+                    </p>
                   </div>
                   <div className="ai-summary-card">
                     <h4>Category Edge</h4>
-                    <p>{modalData.aiSummary.categoryEdge}</p>
+                    <p>
+                      {renderAiText(
+                        modalData.aiSummary.categoryEdge,
+                        modalData.aiSummaryEvent,
+                        modalData.aiSummaryCategory
+                      )}
+                    </p>
                   </div>
                 </div>
               )}
@@ -1266,7 +1414,7 @@ export default function Home() {
               <button
                 className="pill-button"
                 type="button"
-                onClick={() => toggleTrack(activeModalAddress)}
+                onClick={() => void toggleTrack(activeModalAddress)}
               >
                 {isTracked(activeModalAddress) ? "Untrack Wallet" : "Track Wallet"}
               </button>
@@ -1311,7 +1459,7 @@ export default function Home() {
                         <td>—</td>
                         <td>—</td>
                         <td>
-                          <button className="star-btn active" onClick={() => toggleTrack(address)}>
+                          <button className="star-btn active" onClick={() => void toggleTrack(address)}>
                             ★
                           </button>
                         </td>
@@ -1356,7 +1504,7 @@ export default function Home() {
                       <td className={`pnl ${pnlClass}`}>{formatCurrency(row.pnl)}</td>
                       <td>{formatCurrency(row.volume)}</td>
                       <td>
-                        <button className="star-btn active" onClick={() => toggleTrack(row.address)}>
+                        <button className="star-btn active" onClick={() => void toggleTrack(row.address)}>
                           ★
                         </button>
                       </td>
