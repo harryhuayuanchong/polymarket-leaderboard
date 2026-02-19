@@ -524,6 +524,41 @@ tbody tr:hover {
   gap: 18px;
 }
 
+.ai-summary-panel {
+  margin-bottom: 18px;
+}
+
+.ai-summary-meta {
+  font-size: 0.75rem;
+  color: var(--modal-muted);
+}
+
+.ai-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-gap: 12px;
+  gap: 12px;
+}
+
+.ai-summary-card {
+  background: var(--modal-panel);
+  border: 1px solid var(--modal-border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.ai-summary-card h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+
+.ai-summary-card p {
+  margin: 0;
+  color: var(--modal-text);
+  line-height: 1.4;
+}
+
 .modal-panel {
   background: var(--modal-panel);
   border: 1px solid var(--modal-border);

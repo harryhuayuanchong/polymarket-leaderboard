@@ -11,6 +11,7 @@ Next.js (TypeScript) app for viewing top Polymarket traders, wallet details, and
 - Position details
 - Trading history
 - Realized PNL chart
+- AI summary section in wallet modal (cached in Supabase)
 - Watchlist with local persistence (`localStorage`)
 - CSV export:
 - Leaderboard
@@ -56,6 +57,29 @@ npm run dev
 http://localhost:3000
 ```
 
+## Environment Variables
+
+Create `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Notes:
+
+- `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are required for DB persistence.
+- If `OPENAI_API_KEY` is missing, the app falls back to rule-based summaries and still stores them.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` server-side only (never expose in client code).
+
+## Supabase Setup
+
+Run this migration in Supabase SQL editor:
+
+- `supabase/migrations/001_wallet_ai_summaries.sql`
+
 ## Build and Run
 
 Build:
@@ -77,6 +101,13 @@ npm run start
 - `/api/public-profile?address=<wallet>`
 - Proxy target:
 - `https://gamma-api.polymarket.com/public-profile`
+- AI summary endpoint:
+- `POST /api/ai-summary`
+- Behavior:
+- Read from `wallet_ai_summaries` by wallet + payload hash
+- Generate summary with OpenAI if cache miss
+- Fall back to deterministic rule-based summary if AI key is unavailable
+- Upsert back into Supabase for reuse
 
 ## Deployment (Vercel)
 

@@ -58,6 +58,13 @@ type CacheEntry<T> = {
   timestamp: number;
 };
 
+type AiSummary = {
+  performanceSnapshot: string;
+  holdingBehavior: string;
+  tradePattern: string;
+  categoryEdge: string;
+};
+
 function shortAddress(address?: string | null) {
   if (!address) return "—";
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -139,6 +146,16 @@ export default function Home() {
     historyHtml: "Loading...",
     chartHtml: "<div class=\"chart-empty\">Loading...</div>",
     chartValue: "$0.00",
+    aiSummaryLoading: true,
+    aiSummaryError: "",
+    aiSummarySource: "",
+    aiSummaryUpdatedAt: "",
+    aiSummary: {
+      performanceSnapshot: "",
+      holdingBehavior: "",
+      tradePattern: "",
+      categoryEdge: "",
+    } as AiSummary,
   });
   const [modalRaw, setModalRaw] = useState<{ positions: any[]; activity: any[] }>({
     positions: [],
@@ -575,6 +592,16 @@ export default function Home() {
       historyHtml: "Loading...",
       chartHtml: '<div class="chart-empty">Loading...</div>',
       chartValue: "$0.00",
+      aiSummaryLoading: true,
+      aiSummaryError: "",
+      aiSummarySource: "",
+      aiSummaryUpdatedAt: "",
+      aiSummary: {
+        performanceSnapshot: "",
+        holdingBehavior: "",
+        tradePattern: "",
+        categoryEdge: "",
+      },
     }));
     setModalRaw({ positions: [], activity: [] });
 
@@ -610,6 +637,19 @@ export default function Home() {
       0
     );
 
+    const wins = closedPositions.filter((item: any) => Number(item?.realizedPnl ?? item?.pnl ?? 0) > 0).length;
+    const losses = closedPositions.filter((item: any) => Number(item?.realizedPnl ?? item?.pnl ?? 0) < 0).length;
+    const totalClosedDecisions = wins + losses;
+    const winRate = totalClosedDecisions > 0 ? (wins / totalClosedDecisions) * 100 : null;
+    const sortedByValue = [...positions].sort(
+      (a, b) => Number(b?.currentValue ?? b?.value ?? 0) - Number(a?.currentValue ?? a?.value ?? 0)
+    );
+    const topPosition = sortedByValue[0];
+    const topPositionTitle = topPosition?.title || null;
+    const topPositionValue = Number(topPosition?.currentValue ?? topPosition?.value ?? 0) || 0;
+    const categoryHint =
+      topPosition?.category || topPosition?.market?.category || topPosition?.tags?.[0] || null;
+
     setModalData((prev) => ({
       ...prev,
       name: profileName,
@@ -629,6 +669,41 @@ export default function Home() {
     setModalRaw({ positions, activity });
 
     renderPnlChart(closedPositions);
+
+    try {
+      const aiResponse = await fetchAiSummary(row.address, {
+        walletAddress: row.address,
+        realizedPnl: realized,
+        lifetimeVolume: volume,
+        openPositions: positions.length,
+        openPositionsValue: positionsValue,
+        trades: trades.length,
+        buys: trades.filter((item: any) => item?.side === "BUY").length,
+        sells: trades.filter((item: any) => item?.side === "SELL").length,
+        topPositionTitle,
+        topPositionValue,
+        winRate,
+        categoryHint,
+      });
+
+      if (activeModalRef.current !== row.address) return;
+
+      setModalData((prev) => ({
+        ...prev,
+        aiSummaryLoading: false,
+        aiSummaryError: "",
+        aiSummarySource: aiResponse?.source || "",
+        aiSummaryUpdatedAt: aiResponse?.updatedAt || "",
+        aiSummary: aiResponse?.summary || prev.aiSummary,
+      }));
+    } catch (error) {
+      if (activeModalRef.current !== row.address) return;
+      setModalData((prev) => ({
+        ...prev,
+        aiSummaryLoading: false,
+        aiSummaryError: "Unable to generate AI summary right now.",
+      }));
+    }
   }
 
   function closeModal() {
@@ -841,6 +916,22 @@ export default function Home() {
       item?.market || "",
     ]);
     exportCsv(rows, headers, "trading-history");
+  }
+
+  async function fetchAiSummary(wallet: string, payload: Record<string, unknown>) {
+    const response = await fetch("/api/ai-summary", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ wallet, payload }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch AI summary");
+    }
+
+    return response.json();
   }
 
   return (
@@ -1080,6 +1171,45 @@ export default function Home() {
                 <small>Last 200 trades</small>
               </div>
             </div>
+
+            <section className="modal-panel ai-summary-panel">
+              <div className="panel-header">
+                <header>AI Summary</header>
+                <span className="ai-summary-meta">
+                  {modalData.aiSummarySource
+                    ? `${modalData.aiSummarySource === "model" ? "AI model" : "Rule-based"}${
+                        modalData.aiSummaryUpdatedAt
+                          ? ` · ${formatDate(modalData.aiSummaryUpdatedAt)}`
+                          : ""
+                      }`
+                    : ""}
+                </span>
+              </div>
+              {modalData.aiSummaryLoading ? (
+                <div className="chart-empty">Generating summary...</div>
+              ) : modalData.aiSummaryError ? (
+                <div className="chart-empty">{modalData.aiSummaryError}</div>
+              ) : (
+                <div className="ai-summary-grid">
+                  <div className="ai-summary-card">
+                    <h4>Performance Snapshot</h4>
+                    <p>{modalData.aiSummary.performanceSnapshot}</p>
+                  </div>
+                  <div className="ai-summary-card">
+                    <h4>Holding Behavior</h4>
+                    <p>{modalData.aiSummary.holdingBehavior}</p>
+                  </div>
+                  <div className="ai-summary-card">
+                    <h4>Trade Pattern</h4>
+                    <p>{modalData.aiSummary.tradePattern}</p>
+                  </div>
+                  <div className="ai-summary-card">
+                    <h4>Category Edge</h4>
+                    <p>{modalData.aiSummary.categoryEdge}</p>
+                  </div>
+                </div>
+              )}
+            </section>
 
             <section className="modal-panel modal-chart-panel">
               <div className="panel-header">
