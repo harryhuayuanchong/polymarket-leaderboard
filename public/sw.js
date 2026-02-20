@@ -1,9 +1,9 @@
-const CACHE_NAME = "pm-leaderboard-v1";
-const ASSETS = ["/", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-maskable.svg"]; 
+const CACHE_NAME = "pm-leaderboard-v2";
+const STATIC_ASSETS = ["/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
   );
 });
 
@@ -21,6 +21,8 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/_next/")) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   if (event.request.mode === "navigate") {
     event.respondWith(
@@ -29,9 +31,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (!STATIC_ASSETS.includes(url.pathname)) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) =>
-      cached || fetch(event.request).then((response) => {
+      cached ||
+      fetch(event.request).then((response) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;

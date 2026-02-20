@@ -7,15 +7,22 @@ export default function ServiceWorker() {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
 
-    const register = async () => {
+    const setup = async () => {
       try {
+        // Prevent stale chunk/module issues during local development.
+        if (process.env.NODE_ENV !== "production") {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+          return;
+        }
+
         await navigator.serviceWorker.register("/sw.js");
       } catch (error) {
         console.error("Service worker registration failed", error);
       }
     };
 
-    register();
+    setup();
   }, []);
 
   return null;

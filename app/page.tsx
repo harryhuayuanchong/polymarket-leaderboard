@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import PnlChart from "./components/PnlChart";
 
 const API_BASE = "https://data-api.polymarket.com";
 const LABELS_API_BASE = "https://api.walletlabels.xyz/api";
@@ -79,6 +80,14 @@ function normalizeUsername(name: string | null, address: string | null) {
     return shortAddress(match[1]);
   }
   return normalized;
+}
+
+function extractWalletAddress(input?: string | null) {
+  if (!input) return null;
+  const normalized = input.trim().toLowerCase();
+  if (/^0x[a-f0-9]{40}$/.test(normalized)) return normalized;
+  const match = normalized.match(/^(0x[a-f0-9]{40})(?:-.+)?$/);
+  return match ? match[1] : null;
 }
 
 function formatCurrency(value: number | null) {
@@ -179,7 +188,7 @@ export default function Home() {
     positionSummary: "Loading...",
     positionsHtml: "Loading...",
     historyHtml: "Loading...",
-    chartHtml: "<div class=\"chart-empty\">Loading...</div>",
+    chartPoints: [] as Array<{ time: number; value: number }>,
     chartValue: "$0.00",
     aiSummaryLoading: true,
     aiSummaryError: "",
@@ -242,6 +251,24 @@ export default function Home() {
   function updateStatus(message: string, loading = false) {
     setStatus(message);
     setIsLoading(loading);
+  }
+
+  function getOrCreateWatchlistClientId() {
+    const current = watchlistClientIdRef.current;
+    if (current) return current;
+
+    const existing = window.localStorage.getItem(WATCHLIST_CLIENT_KEY);
+    if (existing) {
+      watchlistClientIdRef.current = existing;
+      return existing;
+    }
+
+    const generated = window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.localStorage.setItem(WATCHLIST_CLIENT_KEY, generated);
+    watchlistClientIdRef.current = generated;
+    return generated;
   }
 
   function highlightByRegex(nodes: ReactNode[], regex: RegExp, className: string) {
@@ -555,7 +582,7 @@ export default function Home() {
     if (!positions || positions.length === 0) {
       setModalData((prev) => ({
         ...prev,
-        chartHtml: '<div class="chart-empty">No closed positions yet.</div>',
+        chartPoints: [],
         chartValue: "$0.00",
       }));
       return;
@@ -572,7 +599,7 @@ export default function Home() {
     if (series.length === 0) {
       setModalData((prev) => ({
         ...prev,
-        chartHtml: '<div class="chart-empty">No closed positions yet.</div>',
+        chartPoints: [],
         chartValue: "$0.00",
       }));
       return;
@@ -581,77 +608,14 @@ export default function Home() {
     let cumulative = 0;
     const points = series.map((point) => {
       cumulative += point.pnl;
-      return { x: point.timestamp, y: cumulative };
+      return { time: point.timestamp, value: cumulative };
     });
-
-    const minY = Math.min(...points.map((p) => p.y));
-    const maxY = Math.max(...points.map((p) => p.y));
-    const rangeY = maxY - minY || 1;
-    const minX = points[0].x;
-    const maxX = points[points.length - 1].x;
-    const rangeX = maxX - minX || 1;
-
-    const width = 600;
-    const height = 260;
-    const padding = 18;
-
-    const plotPoints = points.map((point) => {
-      const x = padding + ((point.x - minX) / rangeX) * (width - padding * 2);
-      const y = padding + (1 - (point.y - minY) / rangeY) * (height - padding * 2);
-      return { ...point, sx: x, sy: y };
-    });
-
-    const polyline = plotPoints.map((point) => `${point.sx},${point.sy}`).join(" ");
-
-    const chartHtml = `
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" data-chart>
-        <polyline
-          fill="none"
-          stroke="#5df2b2"
-          stroke-width="2.5"
-          points="${polyline}"
-        />
-      </svg>
-      <div class="chart-tooltip" id="chartTooltip" style="display:none;"></div>
-    `;
 
     setModalData((prev) => ({
       ...prev,
-      chartHtml,
-      chartValue: formatCurrency(points[points.length - 1]?.y ?? 0),
+      chartPoints: points,
+      chartValue: formatCurrency(points[points.length - 1]?.value ?? 0),
     }));
-
-    window.requestAnimationFrame(() => {
-      const tooltip = document.getElementById("chartTooltip");
-      const svg = document.querySelector("[data-chart]") as SVGSVGElement | null;
-      if (!tooltip || !svg) return;
-
-      svg.onmousemove = (event) => {
-        const rect = svg.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * width;
-        let closest = plotPoints[0];
-        let minDist = Math.abs(closest.sx - x);
-        for (const point of plotPoints) {
-          const dist = Math.abs(point.sx - x);
-          if (dist < minDist) {
-            minDist = dist;
-            closest = point;
-          }
-        }
-        const date = new Date(closest.x).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
-        tooltip.style.display = "block";
-        tooltip.style.left = `${(closest.sx / width) * 100}%`;
-        tooltip.style.top = `${(closest.sy / height) * 100}%`;
-        tooltip.textContent = `${date} · ${formatCurrency(closest.y)}`;
-      };
-
-      svg.onmouseleave = () => {
-        tooltip.style.display = "none";
-      };
-    });
   }
 
   async function openModal(row: LeaderboardRow) {
@@ -674,7 +638,7 @@ export default function Home() {
       positionSummary: "Loading...",
       positionsHtml: "Loading...",
       historyHtml: "Loading...",
-      chartHtml: '<div class="chart-empty">Loading...</div>',
+      chartPoints: [],
       chartValue: "$0.00",
       aiSummaryLoading: true,
       aiSummaryError: "",
@@ -892,19 +856,8 @@ export default function Home() {
   }, [category, timePeriod, limit]);
 
   useEffect(() => {
-    const ensureClientId = () => {
-      const existing = window.localStorage.getItem(WATCHLIST_CLIENT_KEY);
-      if (existing) return existing;
-      const generated = window.crypto?.randomUUID
-        ? window.crypto.randomUUID()
-        : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      window.localStorage.setItem(WATCHLIST_CLIENT_KEY, generated);
-      return generated;
-    };
-
     const loadWatchlist = async () => {
-      const clientId = ensureClientId();
-      watchlistClientIdRef.current = clientId;
+      const clientId = getOrCreateWatchlistClientId();
 
       const response = await fetch("/api/watchlist", {
         method: "GET",
@@ -944,18 +897,18 @@ export default function Home() {
   }
 
   function isTracked(address: string | null) {
-    if (!address) return false;
-    return tracked.includes(address.toLowerCase());
+    const normalized = extractWalletAddress(address);
+    if (!normalized) return false;
+    return tracked.includes(normalized);
   }
 
   async function toggleTrack(address: string | null) {
-    if (!address) return;
-    const normalized = address.toLowerCase();
-    const clientId = watchlistClientIdRef.current;
-    if (!clientId) {
-      showToast("Watchlist client not ready");
+    const normalized = extractWalletAddress(address);
+    if (!normalized) {
+      showToast("Wallet address unavailable");
       return;
     }
+    const clientId = getOrCreateWatchlistClientId();
 
     const exists = tracked.includes(normalized);
     const next = exists ? tracked.filter((item) => item !== normalized) : [...tracked, normalized];
@@ -973,7 +926,10 @@ export default function Home() {
     if (!response || !response.ok) {
       setTracked(tracked);
       showToast("Unable to update watchlist");
+      return;
     }
+
+    showToast(exists ? "Removed from watchlist" : "Added to watchlist");
   }
 
   function exportCsv(rows: any[][], headers: string[], filename: string) {
@@ -1187,7 +1143,8 @@ export default function Home() {
           <tbody>
             {sortedRows.map((row) => {
               const pnlClass = row.pnl >= 0 ? "positive" : "negative";
-              const trackedActive = isTracked(row.address);
+              const resolvedAddress = extractWalletAddress(row.address || row.name);
+              const trackedActive = isTracked(resolvedAddress);
               return (
                 <tr key={row.address ?? row.rank ?? Math.random()}>
                   <td>{row.rank ?? "—"}</td>
@@ -1225,7 +1182,12 @@ export default function Home() {
                   <td>
                     <button
                       className={`star-btn ${trackedActive ? "active" : ""}`}
-                      onClick={() => void toggleTrack(row.address)}
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void toggleTrack(resolvedAddress);
+                      }}
                     >
                       {trackedActive ? "★" : "☆"}
                     </button>
@@ -1367,7 +1329,13 @@ export default function Home() {
                 </div>
               </div>
               <div className="chart-value">{modalData.chartValue}</div>
-              <div className="chart chart-large" dangerouslySetInnerHTML={{ __html: modalData.chartHtml }} />
+              <div className="chart chart-large">
+                {modalData.chartPoints.length > 0 ? (
+                  <PnlChart data={modalData.chartPoints} />
+                ) : (
+                  <div className="chart-empty">No closed positions yet.</div>
+                )}
+              </div>
             </section>
 
             <div className="modal-grid">
@@ -1444,8 +1412,8 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {tracked.map((address) => {
-                  const row = leaderboard.find((item) => item.address?.toLowerCase() === address);
+              {tracked.map((address) => {
+                const row = leaderboard.find((item) => item.address?.toLowerCase() === address);
                   if (!row) {
                     return (
                       <tr key={address}>
@@ -1459,7 +1427,15 @@ export default function Home() {
                         <td>—</td>
                         <td>—</td>
                         <td>
-                          <button className="star-btn active" onClick={() => void toggleTrack(address)}>
+                          <button
+                            className="star-btn active"
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void toggleTrack(address);
+                            }}
+                          >
                             ★
                           </button>
                         </td>
@@ -1467,6 +1443,7 @@ export default function Home() {
                     );
                   }
                   const pnlClass = row.pnl >= 0 ? "positive" : "negative";
+                  const resolvedAddress = extractWalletAddress(row.address || row.name || address);
                   return (
                     <tr key={address}>
                       <td>{row.rank ?? "—"}</td>
@@ -1504,7 +1481,15 @@ export default function Home() {
                       <td className={`pnl ${pnlClass}`}>{formatCurrency(row.pnl)}</td>
                       <td>{formatCurrency(row.volume)}</td>
                       <td>
-                        <button className="star-btn active" onClick={() => void toggleTrack(row.address)}>
+                        <button
+                          className="star-btn active"
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void toggleTrack(resolvedAddress);
+                          }}
+                        >
                           ★
                         </button>
                       </td>
