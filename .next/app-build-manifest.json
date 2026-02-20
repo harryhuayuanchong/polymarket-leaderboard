@@ -1,3 +1,46 @@
 {
-  "pages": {}
+  "pages": {
+    "/_not-found/page": [
+      "static/chunks/webpack-cb86a99cd2f791d1.js",
+      "static/chunks/fd9d1056-00bb33a35b5f8051.js",
+      "static/chunks/23-68b493f91180a142.js",
+      "static/chunks/main-app-ed45395e68eaef50.js",
+      "static/chunks/app/_not-found/page-8520002249bfd8d4.js"
+    ],
+    "/layout": [
+      "static/chunks/webpack-cb86a99cd2f791d1.js",
+      "static/chunks/fd9d1056-00bb33a35b5f8051.js",
+      "static/chunks/23-68b493f91180a142.js",
+      "static/chunks/main-app-ed45395e68eaef50.js",
+      "static/css/62e25d7c6370333f.css",
+      "static/chunks/138-eb54fa3b88e84bbf.js",
+      "static/chunks/app/layout-40b6c535ddfc8e67.js"
+    ],
+    "/labs/weather/markets/[id]/page": [
+      "static/chunks/webpack-cb86a99cd2f791d1.js",
+      "static/chunks/fd9d1056-00bb33a35b5f8051.js",
+      "static/chunks/23-68b493f91180a142.js",
+      "static/chunks/main-app-ed45395e68eaef50.js",
+      "static/chunks/d0709137-4eb6f582ee2f8c06.js",
+      "static/chunks/138-eb54fa3b88e84bbf.js",
+      "static/chunks/app/labs/weather/markets/[id]/page-d4f9612238d4866d.js"
+    ],
+    "/labs/weather/page": [
+      "static/chunks/webpack-cb86a99cd2f791d1.js",
+      "static/chunks/fd9d1056-00bb33a35b5f8051.js",
+      "static/chunks/23-68b493f91180a142.js",
+      "static/chunks/main-app-ed45395e68eaef50.js",
+      "static/chunks/138-eb54fa3b88e84bbf.js",
+      "static/chunks/150-1536ac62f03ad9ec.js",
+      "static/chunks/app/labs/weather/page-554a40559198f06d.js"
+    ],
+    "/page": [
+      "static/chunks/webpack-cb86a99cd2f791d1.js",
+      "static/chunks/fd9d1056-00bb33a35b5f8051.js",
+      "static/chunks/23-68b493f91180a142.js",
+      "static/chunks/main-app-ed45395e68eaef50.js",
+      "static/chunks/d0709137-4eb6f582ee2f8c06.js",
+      "static/chunks/app/page-6bdb64d552bec34f.js"
+    ]
+  }
 }

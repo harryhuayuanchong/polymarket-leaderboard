@@ -1,1 +1,14 @@
-{}
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/ai-summary/route": "app/api/ai-summary/route.js",
+  "/api/public-profile/route": "app/api/public-profile/route.js",
+  "/api/watchlist/route": "app/api/watchlist/route.js",
+  "/api/weather/analyze/route": "app/api/weather/analyze/route.js",
+  "/api/weather/markets/[id]/backtest/route": "app/api/weather/markets/[id]/backtest/route.js",
+  "/api/weather/markets/[id]/route": "app/api/weather/markets/[id]/route.js",
+  "/labs/weather/markets/[id]/page": "app/labs/weather/markets/[id]/page.js",
+  "/labs/weather/page": "app/labs/weather/page.js",
+  "/api/weather/markets/list/route": "app/api/weather/markets/list/route.js",
+  "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
+  "/page": "app/page.js"
+}
