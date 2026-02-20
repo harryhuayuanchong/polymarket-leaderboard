@@ -285,22 +285,24 @@ async function loadTopHolders(snapshot: Record<string, unknown>, assetId: string
 }
 
 function parseHolders(payload: unknown) {
+  const candidate = payload as { data?: unknown; holders?: unknown } | null;
   const list = Array.isArray(payload)
     ? payload
-    : Array.isArray((payload as any)?.data)
-      ? (payload as any).data
-      : Array.isArray((payload as any)?.holders)
-        ? (payload as any).holders
+    : Array.isArray(candidate?.data)
+      ? candidate.data
+      : Array.isArray(candidate?.holders)
+        ? candidate.holders
         : [];
 
   const rows = list
-    .map((item: any) => {
-      const holder = String(item?.proxyWallet || item?.wallet || item?.address || item?.holder || "").trim();
+    .map((item): { holder: string; size: number | null } | null => {
+      const row = item as Record<string, unknown>;
+      const holder = String(row.proxyWallet ?? row.wallet ?? row.address ?? row.holder ?? "").trim();
       if (!holder) return null;
-      const size = numberOrNull(item?.size ?? item?.shares ?? item?.amount ?? item?.balance);
+      const size = numberOrNull(row.size ?? row.shares ?? row.amount ?? row.balance);
       return { holder, size };
     })
-    .filter((row): row is { holder: string; size: number | null } => Boolean(row));
+    .filter((row): row is { holder: string; size: number | null } => row !== null);
 
   const visibleTotal = rows.reduce((sum, row) => sum + (row.size ?? 0), 0);
   return rows.slice(0, 10).map((row) => ({

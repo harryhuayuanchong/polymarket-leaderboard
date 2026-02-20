@@ -169,7 +169,6 @@ export default function Home() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [sortState, setSortState] = useState<SortState>({ key: "pnl", direction: "desc" });
   const [toast, setToast] = useState<string | null>(null);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [modalOpen, setModalOpen] = useState(false);
   const [activeModalAddress, setActiveModalAddress] = useState<string | null>(null);
   const [tracked, setTracked] = useState<string[]>([]);
@@ -879,23 +878,6 @@ export default function Home() {
     void loadWatchlist();
   }, []);
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem("theme");
-    if (stored === "dark" || stored === "light") {
-      setTheme(stored);
-      document.body.dataset.theme = stored;
-    } else {
-      document.body.dataset.theme = "light";
-    }
-  }, []);
-
-  function toggleTheme() {
-    const nextTheme = theme === "light" ? "dark" : "light";
-    setTheme(nextTheme);
-    document.body.dataset.theme = nextTheme;
-    window.localStorage.setItem("theme", nextTheme);
-  }
-
   function isTracked(address: string | null) {
     const normalized = extractWalletAddress(address);
     if (!normalized) return false;
@@ -1037,9 +1019,6 @@ export default function Home() {
             <span className="label">Results</span>
             <span className="value">{leaderboard.length}</span>
           </div>
-          <button className="pill-button theme-toggle" onClick={toggleTheme}>
-            {theme === "light" ? "Dark Mode" : "Light Mode"}
-          </button>
         </div>
       </header>
 
